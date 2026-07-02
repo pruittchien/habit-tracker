@@ -547,7 +547,7 @@ function matchHabits(text, habits) {
 // pending matches before send
 let pendingMatches = [];
 
-function renderMatchChips(matches, done) {
+function renderMatchChips(matches, done, queryText) {
   const el = document.getElementById('match-chips');
   el.innerHTML = '';
   matches.forEach(h => {
@@ -570,6 +570,17 @@ function renderMatchChips(matches, done) {
     };
     el.appendChild(btn);
   });
+
+  if (matches.length === 0 && queryText) {
+    const btn = document.createElement('button');
+    btn.className = 'match-chip';
+    btn.style.background = 'var(--surface2)';
+    btn.style.color = 'var(--text2)';
+    btn.style.border = '1.5px dashed var(--border2)';
+    btn.innerHTML = `＋ Add "${queryText}" as new habit`;
+    btn.onclick = () => quickAddHabit(queryText);
+    el.appendChild(btn);
+  }
 }
 
 function submitQuick() {
@@ -582,10 +593,9 @@ function submitQuick() {
   const done = s.logs[k];
   const matches = matchHabits(text, s.habits);
   if (matches.length === 0) {
-    showToast("No habit matched — try different words");
+    quickAddHabit(text);
     return;
   }
-  // log all matches that aren't already done
   let added = [];
   matches.forEach(h => {
     if (!done.includes(h.id)) { done.push(h.id); added.push(h); }
@@ -593,9 +603,86 @@ function submitQuick() {
   save(s);
   inp.value = '';
   document.getElementById('quick-send').disabled = true;
+  document.getElementById('match-chips').innerHTML = '';
   renderToday();
   if (added.length) showToast('✓ ' + added.map(h=>h.name).join(', '));
   else showToast('Already logged!');
+}
+
+function quickAddHabit(text) {
+  const capitalized = text.charAt(0).toUpperCase() + text.slice(1);
+  document.getElementById('sheet-title').textContent = 'New habit';
+  document.getElementById('sheet-subtitle').textContent = 'Fill in the details and save';
+  document.getElementById('sheet-body').innerHTML = `
+    <div class="form-field">
+      <label>Name</label>
+      <input id="qa-name" type="text" value="${capitalized}" maxlength="40" autocomplete="off"
+        style="width:100%;padding:11px 13px;background:var(--surface2);border:0.5px solid var(--border2);border-radius:var(--radius-sm);font-size:16px;color:var(--text);font-family:inherit;outline:none;appearance:none;">
+    </div>
+    <div class="form-field" style="margin-top:10px;">
+      <label>Keywords</label>
+      <input id="qa-keys" type="text" value="${text.toLowerCase()}" maxlength="100" autocomplete="off"
+        placeholder="comma-separated words to match"
+        style="width:100%;padding:11px 13px;background:var(--surface2);border:0.5px solid var(--border2);border-radius:var(--radius-sm);font-size:16px;color:var(--text);font-family:inherit;outline:none;appearance:none;">
+      <div class="form-hint" style="font-size:12px;color:var(--text3);margin-top:4px;">Words that trigger this habit in quick entry</div>
+    </div>
+    <div class="form-field" style="margin-top:10px;">
+      <label>Icon</label>
+      <div id="qa-emoji-picker" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+    </div>
+    <div class="form-field" style="margin-top:10px;">
+      <label>Color</label>
+      <div id="qa-color-picker" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+    </div>
+    <button onclick="saveQuickHabit()" style="width:100%;padding:14px;background:var(--text);color:var(--bg);border:none;border-radius:var(--radius-sm);font-size:16px;font-weight:700;cursor:pointer;margin-top:14px;font-family:inherit;">
+      Save &amp; log today
+    </button>
+  `;
+  renderQAPickers();
+  document.getElementById('sheet-backdrop').classList.add('open');
+  setTimeout(() => document.getElementById('qa-name').focus(), 350);
+}
+
+let qaColor = COLORS[0], qaEmoji = EMOJIS[0];
+
+function renderQAPickers() {
+  const ep = document.getElementById('qa-emoji-picker');
+  if (!ep) return;
+  ep.innerHTML = '';
+  EMOJIS.forEach(e => {
+    const b = document.createElement('div');
+    b.style.cssText = `width:38px;height:38px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;border:2.5px solid ${e===qaEmoji?'var(--text)':'transparent'};font-size:20px;background:var(--surface2);flex-shrink:0;`;
+    b.textContent = e;
+    b.onclick = () => { qaEmoji = e; renderQAPickers(); };
+    ep.appendChild(b);
+  });
+  const cp = document.getElementById('qa-color-picker');
+  cp.innerHTML = '';
+  COLORS.forEach(c => {
+    const b = document.createElement('div');
+    b.style.cssText = `width:38px;height:38px;border-radius:50%;cursor:pointer;border:2.5px solid ${c===qaColor?'var(--text)':'transparent'};background:${c};flex-shrink:0;`;
+    b.onclick = () => { qaColor = c; renderQAPickers(); };
+    cp.appendChild(b);
+  });
+}
+
+function saveQuickHabit() {
+  const name = document.getElementById('qa-name').value.trim();
+  if (!name) { document.getElementById('qa-name').focus(); return; }
+  const keywords = document.getElementById('qa-keys').value.trim();
+  const s = load();
+  const newHabit = { id: 'h'+Date.now(), name, desc: '', keywords, emoji: qaEmoji, color: qaColor };
+  s.habits.push(newHabit);
+  const k = todayKey();
+  if (!s.logs[k]) s.logs[k] = [];
+  s.logs[k].push(newHabit.id);
+  save(s);
+  closeSheet();
+  document.getElementById('quick-entry').value = '';
+  document.getElementById('quick-send').disabled = true;
+  document.getElementById('match-chips').innerHTML = '';
+  renderToday();
+  showToast(`✓ ${name} added & logged`);
 }
 
 function onQuickInput() {
@@ -607,7 +694,7 @@ function onQuickInput() {
   const s = load();
   const done = s.logs[todayKey()] || [];
   const matches = matchHabits(text, s.habits);
-  renderMatchChips(matches, done);
+  renderMatchChips(matches, done, text);
 }
 
 // ── Toast ──
