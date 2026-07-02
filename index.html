@@ -471,10 +471,11 @@ let calY, calM, period = 30, selColor = COLORS[0], selEmoji = EMOJIS[0];
 // ── Default keywords per built-in habit ──
 const DEFAULT_KEYWORDS = {
   h1: 'walk,walked,walking,steps,stroll,outside,20 min',
-  h2: 'pt,physical therapy,exercises,exercise,stretches,stretching,squats,rehab',
+  h2: 'pt,physical therapy,exercises,exercise,stretches,stretching,rehab,therapy',
   h3: 'water,stanley,stanleys,hydrated,hydration,drank,drink',
   h4: 'meditate,meditated,meditation,breathe,breathing,mindful,calm,5 min',
   h5: 'seeds,seed,seed cycle,cycling',
+  h6: 'squats,squat,30 squats,strength,legs',
 };
 
 function load() {
@@ -487,6 +488,7 @@ function load() {
       {id:'h3', name:'Drink 2 stanleys', desc:'~64 oz water',     emoji:'💧', color:'#00BCD4', keywords: DEFAULT_KEYWORDS.h3},
       {id:'h4', name:'Meditate 5 min',   desc:'Any style',         emoji:'🧘', color:'#9C27B0', keywords: DEFAULT_KEYWORDS.h4},
       {id:'h5', name:'Seed cycle',       desc:'Daily seeds',       emoji:'🌱', color:'#FF9800', keywords: DEFAULT_KEYWORDS.h5},
+      {id:'h6', name:'30 squats',        desc:'',                  emoji:'🏃', color:'#F44336', keywords: DEFAULT_KEYWORDS.h6},
     ],
     logs: {}
   };
