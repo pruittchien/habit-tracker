@@ -422,6 +422,10 @@ nav button .nav-icon { font-size: 24px; line-height: 1; }
   </div>
   <div class="stat-grid" id="stat-grid"></div>
   <div class="habit-stats">
+    <div class="hs-title">Mood</div>
+    <div id="mood-stats"></div>
+  </div>
+  <div class="habit-stats">
     <div class="hs-title">By habit</div>
     <div id="hs-list"></div>
   </div>
@@ -487,11 +491,11 @@ const COLORS = ['#4CAF50','#2196F3','#9C27B0','#FF9800','#F44336','#00BCD4','#E9
 const EMOJIS = ['🚶','🏋️','💧','🧘','🌱','📖','😴','🥗','💊','🎯','🎸','✍️','🛁','🌿','❤️','🌟','🏃','🧴','☕','🥦'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MOODS = [
-  { score: 1, icon: '😞', label: 'rough' },
-  { score: 2, icon: '😕', label: 'meh'   },
-  { score: 3, icon: '😐', label: 'okay'  },
-  { score: 4, icon: '🙂', label: 'good'  },
-  { score: 5, icon: '😄', label: 'great' },
+  { score: 1, icon: '😞', label: 'rough', bg: '#EEEDFE', text: '#534AB7' },
+  { score: 2, icon: '😕', label: 'meh',   bg: '#E0DEFF', text: '#534AB7' },
+  { score: 3, icon: '😐', label: 'okay',  bg: '#F1EFE8', text: '#5F5E5A' },
+  { score: 4, icon: '🙂', label: 'good',  bg: '#FAECE7', text: '#993C1D' },
+  { score: 5, icon: '😄', label: 'great', bg: '#F5C4B3', text: '#712B13' },
 ];
 
 let calY, calM, period = 30, selColor = COLORS[0], selEmoji = EMOJIS[0];
@@ -855,9 +859,11 @@ function renderCalendar() {
 
     const mood = s.moods[k] || 0;
     if (mood) {
+      const moodDef = MOODS[mood - 1];
+      cell.style.background = moodDef.bg;
       const pip = document.createElement('div');
       pip.className = 'mood-pip';
-      pip.textContent = MOODS[mood - 1].icon;
+      pip.textContent = moodDef.icon;
       cell.appendChild(pip);
     }
 
@@ -887,26 +893,50 @@ function shiftMonth(d) {
 
 // Editable day sheet
 function openDaySheet(y, m, d) {
-  const s = load();
   const k = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
   const dateObj = new Date(y,m,d);
   const isToday = k === todayKey();
-
   document.getElementById('sheet-title').textContent =
     dateObj.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
-  const moodScore = s.moods[k] || 0;
-  const moodStr = moodScore ? ` · ${MOODS[moodScore-1].icon} ${MOODS[moodScore-1].label}` : '';
   document.getElementById('sheet-subtitle').textContent =
-    (isToday ? 'Today — tap to toggle' : 'Tap any habit to add or remove') + moodStr;
-
-  renderSheetBody(k, s);
+    isToday ? 'Tap to toggle habits or set your mood' : 'Tap to edit habits or mood for this day';
+  renderSheetBody(k);
   document.getElementById('sheet-backdrop').classList.add('open');
 }
 
-function renderSheetBody(k, s) {
+function renderSheetBody(k) {
+  const s = load();
   const done = s.logs[k] || [];
+  const currentMood = s.moods[k] || 0;
   const body = document.getElementById('sheet-body');
   body.innerHTML = '';
+
+  // mood picker row inside sheet
+  const moodWrap = document.createElement('div');
+  moodWrap.style.cssText = 'display:flex;justify-content:space-between;gap:6px;margin-bottom:14px;';
+  MOODS.forEach(m => {
+    const btn = document.createElement('button');
+    const isSelected = currentMood === m.score;
+    btn.style.cssText = `flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border-radius:12px;border:2px solid ${isSelected?'rgba(0,0,0,0.2)':'transparent'};background:${isSelected?m.bg:'var(--surface2)'};cursor:pointer;font-family:inherit;transition:all 0.15s;`;
+    btn.innerHTML = `<span style="font-size:22px;line-height:1">${m.icon}</span><span style="font-size:9px;font-weight:700;color:${isSelected?m.text:'var(--text3)'};">${m.label}</span>`;
+    btn.onclick = () => {
+      const s2 = load();
+      s2.moods[k] = (s2.moods[k] === m.score) ? 0 : m.score;
+      save(s2);
+      renderSheetBody(k);
+      renderCalendar();
+      if (k === todayKey()) renderMoodRow(s2, k);
+    };
+    moodWrap.appendChild(btn);
+  });
+  body.appendChild(moodWrap);
+
+  // divider
+  const div = document.createElement('div');
+  div.style.cssText = 'font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;';
+  div.textContent = 'Habits';
+  body.appendChild(div);
+
   s.habits.forEach(h => {
     const isDone = done.includes(h.id);
     const row = document.createElement('div');
@@ -922,7 +952,7 @@ function renderSheetBody(k, s) {
       const idx = s2.logs[k].indexOf(h.id);
       if (idx>=0) s2.logs[k].splice(idx,1); else s2.logs[k].push(h.id);
       save(s2);
-      renderSheetBody(k, s2);
+      renderSheetBody(k);
       renderCalendar();
       if (k === todayKey()) renderToday();
     };
@@ -958,6 +988,35 @@ function renderStats() {
     <div class="stat-card"><div class="stat-lbl">Check-ins</div><div class="stat-val">${totalDone}</div><div class="stat-sub">total</div></div>
     <div class="stat-card"><div class="stat-lbl">Current streak</div><div class="stat-val">${streakCount}</div><div class="stat-sub">perfect days</div></div>
   `;
+  // mood stats
+  const moodKeys = keys.filter(k => s.moods[k]);
+  const moodScores = moodKeys.map(k => s.moods[k]);
+  const moodAvg = moodScores.length ? (moodScores.reduce((a,b)=>a+b,0) / moodScores.length) : 0;
+  const moodEl = document.getElementById('mood-stats');
+  if (moodScores.length === 0) {
+    moodEl.innerHTML = `<div style="font-size:13px;color:var(--text3);padding:8px 0 4px;">No mood data for this period yet.</div>`;
+  } else {
+    const avgMood = MOODS[Math.round(moodAvg) - 1];
+    const dist = MOODS.map(m => moodScores.filter(s => s === m.score).length);
+    const maxDist = Math.max(...dist, 1);
+    moodEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:14px;background:${avgMood.bg};border-radius:14px;padding:14px 16px;margin-bottom:10px;">
+        <span style="font-size:36px;line-height:1">${avgMood.icon}</span>
+        <div>
+          <div style="font-size:22px;font-weight:700;color:${avgMood.text};line-height:1">${moodAvg.toFixed(1)}<span style="font-size:13px;font-weight:500"> / 5</span></div>
+          <div style="font-size:13px;font-weight:600;color:${avgMood.text};opacity:0.8;margin-top:2px;">avg mood · ${moodScores.length} day${moodScores.length!==1?'s':''} logged</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:flex-end;height:56px;margin-bottom:6px;">
+        ${MOODS.map((m,i) => `
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">
+            <div style="font-size:10px;font-weight:700;color:var(--text3)">${dist[i]||''}</div>
+            <div style="width:100%;background:${m.bg};border-radius:4px 4px 0 0;height:${dist[i]?Math.max(6,Math.round((dist[i]/maxDist)*36)):4}px;transition:height 0.4s;opacity:${dist[i]?1:0.3}"></div>
+            <div style="font-size:15px">${m.icon}</div>
+          </div>`).join('')}
+      </div>`;
+  }
+
   const list=document.getElementById('hs-list'); list.innerHTML='';
   s.habits.forEach(h=>{
     const done=keys.filter(k=>(s.logs[k]||[]).includes(h.id)).length;
