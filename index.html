@@ -138,6 +138,24 @@ nav button .nav-icon { font-size: 24px; line-height: 1; }
 .progress-fill { height: 100%; border-radius: 3px; background: #4CAF50; transition: width 0.35s cubic-bezier(0.34,1.56,0.64,1); }
 .progress-label { font-size: 13px; font-weight: 600; color: var(--text2); min-width: 28px; text-align: right; }
 
+/* Mood row */
+.mood-row {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px; gap: 6px;
+}
+.mood-face {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  cursor: pointer; padding: 6px 2px; border-radius: 12px;
+  border: 2px solid transparent; transition: all 0.15s; background: none;
+  font-family: inherit;
+}
+.mood-face:active { transform: scale(0.93); }
+.mood-face .mf-icon { font-size: 26px; line-height: 1; transition: transform 0.15s; }
+.mood-face .mf-label { font-size: 9px; font-weight: 600; color: var(--text3); letter-spacing: 0.2px; }
+.mood-face.selected .mf-icon { transform: scale(1.18); }
+.mood-face.selected .mf-label { color: var(--text2); }
+.mood-face.selected { background: var(--surface2); border-color: var(--border2); }
+
 .date-line { font-size: 13px; color: var(--text2); margin-bottom: 10px; }
 
 .section-label {
@@ -214,8 +232,10 @@ nav button .nav-icon { font-size: 24px; line-height: 1; }
   width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%;
 }
 .cal-day.today .day-num { background: var(--text); color: var(--bg); }
-.day-dots { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; margin-top: 2px; max-width: 38px; }
-.dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.day-dots { display: flex; flex-wrap: wrap; gap: 1.5px; justify-content: center; margin-top: 2px; max-width: 34px; }
+.dot { width: 4px; height: 4px; border-radius: 50%; flex-shrink: 0; }
+.cal-day.has-mood { border-radius: 10px; }
+.mood-pip { font-size: 11px; line-height: 1; margin-top: 1px; }
 
 /* Sheet — used for both calendar detail AND day picker on today */
 .sheet-backdrop {
@@ -343,6 +363,7 @@ nav button .nav-icon { font-size: 24px; line-height: 1; }
 <div class="view active" id="view-today">
   <div class="today-header">
     <div class="date-line" id="date-line"></div>
+    <div class="mood-row" id="mood-row"></div>
     <div class="quick-entry-wrap">
       <input class="quick-entry" id="quick-entry" type="text"
         placeholder="e.g. walked, meditated, drank water…"
@@ -465,6 +486,13 @@ nav button .nav-icon { font-size: 24px; line-height: 1; }
 const COLORS = ['#4CAF50','#2196F3','#9C27B0','#FF9800','#F44336','#00BCD4','#E91E63','#FF5722','#795548','#607D8B','#3F51B5','#009688'];
 const EMOJIS = ['🚶','🏋️','💧','🧘','🌱','📖','😴','🥗','💊','🎯','🎸','✍️','🛁','🌿','❤️','🌟','🏃','🧴','☕','🥦'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MOODS = [
+  { score: 1, icon: '😞', label: 'rough' },
+  { score: 2, icon: '😕', label: 'meh'   },
+  { score: 3, icon: '😐', label: 'okay'  },
+  { score: 4, icon: '🙂', label: 'good'  },
+  { score: 5, icon: '😄', label: 'great' },
+];
 
 let calY, calM, period = 30, selColor = COLORS[0], selEmoji = EMOJIS[0];
 
@@ -480,7 +508,7 @@ const DEFAULT_KEYWORDS = {
 
 function load() {
   const saved = JSON.parse(localStorage.getItem('habits_v4') || 'null');
-  if (saved) return saved;
+  if (saved) { if (!saved.moods) saved.moods = {}; return saved; }
   return {
     habits: [
       {id:'h1', name:'Walk 20 min',     desc:'Any outdoor walk', emoji:'🚶', color:'#4CAF50', keywords: DEFAULT_KEYWORDS.h1},
@@ -490,7 +518,7 @@ function load() {
       {id:'h5', name:'Seed cycle',       desc:'Daily seeds',       emoji:'🌱', color:'#FF9800', keywords: DEFAULT_KEYWORDS.h5},
       {id:'h6', name:'30 squats',        desc:'',                  emoji:'🏃', color:'#F44336', keywords: DEFAULT_KEYWORDS.h6},
     ],
-    logs: {}
+    logs: {}, moods: {}
   };
 }
 function save(s) { localStorage.setItem('habits_v4', JSON.stringify(s)); }
@@ -721,6 +749,25 @@ function gotoView(name, btn) {
   if (name==='settings') renderSettings();
 }
 
+// ── MOOD ──
+function renderMoodRow(s, key) {
+  const current = s.moods[key] || 0;
+  const row = document.getElementById('mood-row');
+  row.innerHTML = '';
+  MOODS.forEach(m => {
+    const btn = document.createElement('button');
+    btn.className = 'mood-face' + (current === m.score ? ' selected' : '');
+    btn.innerHTML = `<span class="mf-icon">${m.icon}</span><span class="mf-label">${m.label}</span>`;
+    btn.onclick = () => {
+      const s2 = load();
+      s2.moods[key] = (s2.moods[key] === m.score) ? 0 : m.score;
+      save(s2);
+      renderMoodRow(s2, key);
+    };
+    row.appendChild(btn);
+  });
+}
+
 // ── TODAY ──
 function renderToday() {
   const s = load();
@@ -728,6 +775,7 @@ function renderToday() {
   const done = s.logs[key] || [];
   document.getElementById('date-line').textContent =
     new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  renderMoodRow(s, key);
 
   const total = s.habits.length, n = done.length;
   document.getElementById('prog-fill').style.width = total ? `${(n/total)*100}%` : '0%';
@@ -805,6 +853,14 @@ function renderCalendar() {
     num.className = 'day-num'; num.textContent = d;
     cell.appendChild(num);
 
+    const mood = s.moods[k] || 0;
+    if (mood) {
+      const pip = document.createElement('div');
+      pip.className = 'mood-pip';
+      pip.textContent = MOODS[mood - 1].icon;
+      cell.appendChild(pip);
+    }
+
     if (done.length) {
       const dotsEl = document.createElement('div');
       dotsEl.className = 'day-dots';
@@ -838,8 +894,10 @@ function openDaySheet(y, m, d) {
 
   document.getElementById('sheet-title').textContent =
     dateObj.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  const moodScore = s.moods[k] || 0;
+  const moodStr = moodScore ? ` · ${MOODS[moodScore-1].icon} ${MOODS[moodScore-1].label}` : '';
   document.getElementById('sheet-subtitle').textContent =
-    isToday ? 'Today — tap to toggle' : 'Tap any habit to add or remove';
+    (isToday ? 'Today — tap to toggle' : 'Tap any habit to add or remove') + moodStr;
 
   renderSheetBody(k, s);
   document.getElementById('sheet-backdrop').classList.add('open');
